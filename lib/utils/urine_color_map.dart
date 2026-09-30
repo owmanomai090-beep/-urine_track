@@ -36,4 +36,20 @@ class UrineColorMap {
   static bool isWarning(int code) {
     return code >= 6;
   }
+  /// แปลงสี RGB จาก ESP32 เป็น colorCode (1-8) โดยหาสีที่ใกล้ที่สุดในตาราง
+  static int fromRgb(int r, int g, int b) {
+    int bestCode = 1;
+    int bestDist = 1 << 30;
+    _colorMap.forEach((code, c) {
+      final dr = c.red - r;
+      final dg = c.green - g;
+      final db = c.blue - b;
+      final d = dr * dr + dg * dg + db * db;
+      if (d < bestDist) {
+        bestDist = d;
+        bestCode = code;
+      }
+    });
+    return bestCode;
+  }
 }

@@ -40,6 +40,8 @@ dependencies:
   provider: ^6.1.2
   fl_chart: ^0.69.0
   path: ^1.9.0
+  flutter_blue_plus: ^1.32.0
+  permission_handler: ^11.3.0
 
 dev_dependencies:
   flutter_test:

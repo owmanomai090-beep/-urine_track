@@ -30,6 +30,7 @@ class DbService {
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             age INTEGER NOT NULL,
+            gender TEXT NOT NULL,
             weight REAL NOT NULL,
             height REAL NOT NULL,
             bedId TEXT NOT NULL,

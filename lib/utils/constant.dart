@@ -6,9 +6,9 @@ class AppConstants{
   // ---------- BLE ----------
   // UUID ต้องตรงกับที่ตั้งค่าไว้ในโค้ด ESP32S3 (ฝั่ง firmware)
   // นี่คือค่าตัวอย่าง ให้แก้ตามที่ ESP32 จริงประกาศไว้
-  static const String bleServiceUuid = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+  static const String bleServiceUuid = '9813eeb1-cbe3-4d79-a952-4b505f9c05d6';
   static const String bleCharacteristicUuid =
-      'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+      '607773fd-6aa5-49af-90a7-e84fe7b46e8e';
 
   // ชื่ออุปกรณ์ ESP32 ที่จะสแกนหา (ตั้งชื่อใน firmware ให้ตรงกัน)
   static const String bleDeviceNamePrefix = 'ESP32_URINE';
