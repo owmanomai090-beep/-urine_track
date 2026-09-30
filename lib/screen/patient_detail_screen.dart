@@ -7,6 +7,7 @@ import '../provider/urine_data_provider.dart';
 import '../service/ble_service.dart';
 import '../utils/constant.dart';
 import '../utils/urine_color_map.dart';
+import '../widgets/aki_card.dart';
 import '../widgets/patient_info_card.dart';
 import '../widgets/urine_chart.dart';
 import 'history_screen.dart';
@@ -34,19 +35,24 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
       provider.loadRecordsForPatient(widget.patient.id);
 
       // รับข้อมูลสดจาก ESP32 แล้วบันทึกเป็น record ของผู้ป่วยคนนี้
-      _sub = BleService.instance.readings.listen((r) {
+      _sub = BleService.instance.readings.listen((r) async {
         if (!mounted) return;
         final now = DateTime.now();
         final ts = _useDeviceHour
             ? DateTime(now.year, now.month, now.day, r.hour, now.minute,
             now.second)
             : now;
-        provider.addNewRecord(UrineRecord(
-          patientId: widget.patient.id,
-          timestamp: ts,
-          volumeMl: r.volume.toDouble(),
-          colorCode: UrineColorMap.fromRgb(r.r, r.g, r.b),
-        ));
+        try {
+          await provider.addNewRecord(UrineRecord(
+            patientId: widget.patient.id,
+            timestamp: ts,
+            volumeMl: r.volume.toDouble(),
+            colorCode: UrineColorMap.fromRgb(r.r, r.g, r.b),
+          ));
+          debugPrint('saved hour ${r.hour}');
+        } catch (e) {
+          debugPrint('save error: $e');
+        }
       });
     });
   }
@@ -75,13 +81,17 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
           IconButton(
             icon: const Icon(Icons.history, color: Colors.white),
             tooltip: 'ดูข้อมูลย้อนหลัง',
-            onPressed: () {
-              Navigator.push(
+            onPressed: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => HistoryScreen(patient: widget.patient),
                 ),
               );
+              if (!mounted) return;
+              context
+                  .read<UrineDataProvider>()
+                  .loadRecordsForPatient(widget.patient.id);
             },
           ),
         ],
@@ -94,6 +104,13 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
             padding: const EdgeInsets.all(AppConstants.defaultPadding),
             children: [
               PatientInfoCard(patient: widget.patient),
+              const SizedBox(height: 16),
+
+              // สถานะ AKI (U0-U3) อัปเดตสดตามข้อมูลที่เข้ามา
+              AkiCard(
+                records: urineProvider.records,
+                weightKg: widget.patient.weight,
+              ),
               const SizedBox(height: 16),
 
               // สถานะล่าสุด
@@ -153,7 +170,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
                 const SizedBox(height: 16),
               ],
 
-              // กราฟเส้น ปริมาตร + สี
+              // กราฟเส้น 24 ชั่วโมง ปริมาตร + สี
               const UrineChart(),
             ],
           ),

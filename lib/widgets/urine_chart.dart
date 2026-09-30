@@ -5,27 +5,58 @@ import '../model/urine_record.dart';
 import '../provider/urine_data_provider.dart';
 import '../utils/urine_color_map.dart';
 
-/// กราฟเส้นเดียว: ความสูง = ปริมาตร (มล.), สีเส้น/จุด = สีปัสสาวะ (colorCode)
-/// อ่านจากฐานข้อมูลผ่าน UrineDataProvider (แยกตามผู้ป่วย) แสดงของวันนี้ 0-23 ชม.
+/// เลือก record ล่าสุดของแต่ละชั่วโมง (ไม่สนลำดับของ list)
+/// ใช้ร่วมกันทั้งกราฟและยอดสรุป เพื่อไม่ให้นับ record ซ้ำในชั่วโมงเดียวกัน
+Map<int, UrineRecord> latestPerHour(Iterable<UrineRecord> records) {
+  final Map<int, UrineRecord> byHour = {};
+  for (final r in records) {
+    final h = r.timestamp.hour;
+    final cur = byHour[h];
+    if (cur == null || r.timestamp.isAfter(cur.timestamp)) {
+      byHour[h] = r;
+    }
+  }
+  return byHour;
+}
+
+/// หน้ารายละเอียดผู้ป่วย: แสดงข้อมูลของ "วันนี้" จาก UrineDataProvider
 class UrineChart extends StatelessWidget {
   const UrineChart({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final records = context.watch<UrineDataProvider>().records;
+    final now = DateTime.now();
+    final today = records.where((r) =>
+    r.timestamp.year == now.year &&
+        r.timestamp.month == now.month &&
+        r.timestamp.day == now.day);
+    return UrineHourlyChart(
+      records: today.toList(),
+      emptyText: 'ยังไม่มีข้อมูลของวันนี้',
+    );
+  }
+}
+
+/// กราฟเส้นเดียว: ความสูง = ปริมาตร (มล.), สีเส้น/จุด = สีปัสสาวะ (colorCode)
+/// รับ records ของวันเดียว (ลำดับใดก็ได้) แล้วรวมเป็นชั่วโมงละ 1 จุดเอง
+class UrineHourlyChart extends StatelessWidget {
+  final List<UrineRecord> records;
+  final String latestLabel;
+  final String emptyText;
+
+  const UrineHourlyChart({
+    super.key,
+    required this.records,
+    this.latestLabel = 'ล่าสุด',
+    this.emptyText = 'ยังไม่มีข้อมูล',
+  });
 
   static const double _lowVolume = 10; // ต่ำกว่าหรือเท่ากับนี้ = ผิดปกติ
 
   @override
   Widget build(BuildContext context) {
-    final records = context.watch<UrineDataProvider>().records;
-
-    // เลือก record ล่าสุดของแต่ละชั่วโมง (records เรียงใหม่ -> เก่า)
-    final now = DateTime.now();
-    final Map<int, UrineRecord> byHour = {};
-    for (final r in records) {
-      final t = r.timestamp;
-      if (t.year != now.year || t.month != now.month || t.day != now.day) {
-        continue;
-      }
-      byHour.putIfAbsent(t.hour, () => r);
-    }
+    final byHour = latestPerHour(records);
     final points = byHour.values.toList()
       ..sort((a, b) => a.timestamp.hour.compareTo(b.timestamp.hour));
     final latest = points.isEmpty ? null : points.last;
@@ -56,8 +87,8 @@ class UrineChart extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(4, 2, 4, 14),
               child: Text(
                 latest == null
-                    ? 'ยังไม่มีข้อมูลของวันนี้'
-                    : 'ล่าสุด ชม.${latest.timestamp.hour}: '
+                    ? emptyText
+                    : '$latestLabel ชม.${latest.timestamp.hour}: '
                     '${latest.volumeMl.toStringAsFixed(0)} มล. · '
                     '${UrineColorMap.getLabel(latest.colorCode)}',
                 style: const TextStyle(color: Colors.black54, fontSize: 13),
@@ -66,13 +97,12 @@ class UrineChart extends StatelessWidget {
             SizedBox(
               height: 240,
               child: points.isEmpty
-                  ? const Center(
-                  child: Text('รอข้อมูลจากอุปกรณ์...',
-                      style: TextStyle(color: Colors.black38)))
+                  ? Center(
+                  child: Text(emptyText,
+                      style: const TextStyle(color: Colors.black38)))
                   : LineChart(_buildChart(points, byHour)),
             ),
             const SizedBox(height: 12),
-            // แถบอธิบายสี: ใส -> เข้ม ตาม UrineColorMap
             Row(
               children: [
                 const Text('ใส',
@@ -120,7 +150,8 @@ class UrineChart extends StatelessWidget {
         .map((r) => FlSpot(r.timestamp.hour.toDouble(), r.volumeMl))
         .toList();
 
-    final maxVol = points.map((r) => r.volumeMl).reduce((a, b) => a > b ? a : b);
+    final maxVol =
+    points.map((r) => r.volumeMl).reduce((a, b) => a > b ? a : b);
     final maxY = maxVol <= 40 ? 50.0 : ((maxVol / 10).ceil() + 1) * 10.0;
 
     final minX = spots.first.x;
@@ -128,9 +159,8 @@ class UrineChart extends StatelessWidget {
     List<Color> colors =
     points.map((r) => UrineColorMap.getColor(r.colorCode)).toList();
     List<double> stops = points
-        .map((r) => maxX == minX
-        ? 0.0
-        : (r.timestamp.hour - minX) / (maxX - minX))
+        .map((r) =>
+    maxX == minX ? 0.0 : (r.timestamp.hour - minX) / (maxX - minX))
         .toList();
     if (colors.length == 1) {
       colors = [colors.first, colors.first];
@@ -182,6 +212,7 @@ class UrineChart extends StatelessWidget {
             interval: 1,
             getTitlesWidget: (v, meta) {
               final h = v.toInt();
+              // แสดงเว้นช่วงทุก 3 ชั่วโมง กันตัวเลขซ้อนกัน
               if (h % 3 != 0 && h != 23) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(top: 6),

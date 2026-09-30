@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../model/bed_zone.dart';
 import '../model/patient.dart';
 import '../provider/patient_provider.dart';
+import '../provider/urine_data_provider.dart';
 import '../utils/constant.dart';
 import '../widgets/bed_card.dart';
 import 'patient_detail_screen.dart';
@@ -23,10 +24,16 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // โหลดข้อมูลผู้ป่วยล่าสุดทุกครั้งที่เข้าหน้านี้
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PatientProvider>().loadPatients();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+  }
+
+  /// โหลดผู้ป่วยล่าสุด แล้วคำนวณ AKI ของทุกเตียง
+  Future<void> _refresh() async {
+    final patientProvider = context.read<PatientProvider>();
+    final urineProvider = context.read<UrineDataProvider>();
+    await patientProvider.loadPatients();
+    if (!mounted) return;
+    await urineProvider.loadAkiForPatients(patientProvider.patients);
   }
 
   // เชื่อมต่อ ESP32
@@ -58,6 +65,7 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final patientProvider = context.watch<PatientProvider>();
+    final urineProvider = context.watch<UrineDataProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -103,10 +111,11 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> {
               return BedCard(
                 bedId: bedId,
                 patient: patient,
-                onTap: () {
+                aki: patient == null ? null : urineProvider.akiFor(patient.id),
+                onTap: () async {
                   if (patient == null) {
                     // เตียงว่าง: เปิดหน้าลงทะเบียนผู้ป่วย
-                    Navigator.push(
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => RegisterPatientScreen(
@@ -115,15 +124,18 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> {
                         ),
                       ),
                     );
+                    if (mounted) _refresh();
                     return;
                   }
                   patientProvider.selectPatient(patient);
-                  Navigator.push(
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => PatientDetailScreen(patient: patient),
                     ),
                   );
+                  // กลับมาแล้วคำนวณ AKI ใหม่ (อาจมีข้อมูลเพิ่มระหว่างอยู่หน้าผู้ป่วย)
+                  if (mounted) _refresh();
                 },
               );
             },

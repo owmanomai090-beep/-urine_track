@@ -4,8 +4,7 @@ import '../model/patient.dart';
 import '../provider/urine_data_provider.dart';
 import '../utils/constant.dart';
 import '../utils/urine_color_map.dart';
-import '../widgets/urine_volume_chart.dart';
-import '../widgets/urine_color_row.dart';
+import '../widgets/urine_chart.dart';
 
 class HistoryScreen extends StatefulWidget {
   final Patient patient;
@@ -54,16 +53,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final urineProvider = context.watch<UrineDataProvider>();
-    // ข้อมูลช่วงเวลาถูกโหลดมาเรียง ASC (เก่า -> ใหม่) อยู่แล้วจาก db_service
+    // ข้อมูลช่วงเวลาถูกโหลดมาเรียง ASC (เก่า -> ใหม่) จาก db_service
     final records = urineProvider.records;
 
+    // รวมเป็นชั่วโมงละ 1 ค่า (ค่าล่าสุดของชั่วโมงนั้น) กันนับซ้ำ
+    final hourly = latestPerHour(records);
     final totalVolume =
-    records.fold<double>(0, (sum, r) => sum + r.volumeMl);
+    hourly.values.fold<double>(0, (sum, r) => sum + r.volumeMl);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         backgroundColor: AppConstants.primaryColor,
+        iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
           'ประวัติ - เตียง ${widget.patient.bedId.toUpperCase()}',
           style: const TextStyle(color: Colors.white),
@@ -91,7 +93,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
               const SizedBox(height: 16),
 
-              // สรุปยอดรวมของวันนั้น
+              // สรุปยอดของวันนั้น (นับรายชั่วโมง)
               Row(
                 children: [
                   Expanded(
@@ -103,8 +105,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _SummaryBox(
-                      label: 'จำนวนครั้งที่บันทึก',
-                      value: '${records.length} ครั้ง',
+                      label: 'ชั่วโมงที่มีข้อมูล',
+                      value: '${hourly.length} ชม.',
                     ),
                   ),
                 ],
@@ -116,19 +118,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ? const Center(child: Text('ไม่มีข้อมูลในวันที่เลือก'))
                     : ListView(
                   children: [
-                    const Text('ปริมาตรปัสสาวะรายชั่วโมง',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    UrineVolumeChart(records: records),
-
-                    const SizedBox(height: 24),
-                    const Text('สีปัสสาวะรายชั่วโมง',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    UrineColorRow(records: records),
-
+                    UrineHourlyChart(
+                      records: records,
+                      latestLabel: 'ชั่วโมงสุดท้าย',
+                    ),
                     const SizedBox(height: 24),
                     const Text('รายละเอียดทั้งหมด',
                         style: TextStyle(
@@ -144,14 +137,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             decoration: BoxDecoration(
                               color: UrineColorMap.getColor(r.colorCode),
                               shape: BoxShape.circle,
-                              border:
-                              Border.all(color: Colors.grey.shade400),
+                              border: Border.all(
+                                  color: Colors.grey.shade400),
                             ),
                           ),
                           title: Text(
                             '${r.timestamp.hour.toString().padLeft(2, '0')}:${r.timestamp.minute.toString().padLeft(2, '0')} น.',
                           ),
-                          subtitle: Text(UrineColorMap.getLabel(r.colorCode)),
+                          subtitle:
+                          Text(UrineColorMap.getLabel(r.colorCode)),
                           trailing: Text(
                             '${r.volumeMl.toStringAsFixed(0)} มล.',
                             style: const TextStyle(
@@ -187,7 +181,8 @@ class _SummaryBox extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(label,
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 4),
             Text(value,
                 style:
